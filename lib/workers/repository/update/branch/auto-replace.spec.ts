@@ -5,7 +5,7 @@ import { GlobalConfig } from '../../../../config/global';
 import { WORKER_FILE_UPDATE_FAILED } from '../../../../constants/error-messages';
 import { extractPackageFile } from '../../../../modules/manager/html';
 import type { BranchUpgradeConfig } from '../../../types';
-import { doAutoReplace } from './auto-replace';
+import { doAutoReplace, doReplacementAutoReplace } from './auto-replace';
 
 const sampleHtml = Fixtures.get(
   'sample.html',
@@ -181,6 +181,61 @@ describe('workers/repository/update/branch/auto-replace', () => {
       ];
       const res = doAutoReplace(upgrade, yml, reuseExistingBranch);
       await expect(res).rejects.toThrow(WORKER_FILE_UPDATE_FAILED);
+    });
+  });
+
+  describe('doReplacementAutoReplace', () => {
+    let reuseExistingBranch: boolean;
+    let upgrade: BranchUpgradeConfig;
+
+    beforeEach(() => {
+      upgrade = {
+        ...JSON.parse(JSON.stringify(defaultConfig)),
+      };
+      reuseExistingBranch = false;
+    });
+
+    it('updates with docker replacement', async () => {
+      const dockerfile = 'FROM bitnami/redis:6.0.8';
+      upgrade.manager = 'dockerfile';
+      upgrade.updateType = 'replacement';
+      upgrade.depName = 'bitnami/redis';
+      upgrade.newName = 'mcr.microsoft.com/oss/bitnami/redis';
+      const res = await doReplacementAutoReplace(
+        upgrade,
+        dockerfile,
+        reuseExistingBranch
+      );
+      expect(res).toMatchSnapshot();
+    });
+
+    it('handles already replaced', async () => {
+      const dockerfile = 'FROM library/ubuntu:20.04';
+      upgrade.manager = 'dockerfile';
+      upgrade.updateType = 'replacement';
+      upgrade.depName = 'library/alpine';
+      upgrade.newName = 'library/ubuntu';
+      const res = await doReplacementAutoReplace(
+        upgrade,
+        dockerfile,
+        reuseExistingBranch
+      );
+      expect(res).toMatchSnapshot();
+    });
+
+    it('updates with terraform replacement', async () => {
+      const hcl =
+        'module "foo" {\nsource = "github.com/hashicorp/example?ref=v1.0.0"\n}';
+      upgrade.manager = 'terraform';
+      upgrade.updateType = 'replacement';
+      upgrade.depName = 'github.com/hashicorp/example';
+      upgrade.newName = 'github.com/hashicorp/new-example';
+      const res = await doReplacementAutoReplace(
+        upgrade,
+        hcl,
+        reuseExistingBranch
+      );
+      expect(res).toMatchSnapshot();
     });
   });
 });
